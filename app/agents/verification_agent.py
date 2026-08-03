@@ -48,24 +48,26 @@ class VerificationAgent:
             "name": document.get("name") or document.get("full_name"),
             "submitted_documents": submitted_documents,
             "missing_documents": required["missing_documents"],
-            "status": "pending" if has_required_document and required["missing_documents"] else "ready_for_confirmation",
+            "status": "pending_confirmation" if has_required_document and required["missing_documents"] else "ready_for_confirmation",
         }
 
         if has_required_document and required["missing_documents"]:
             self.pending_verification = {
                 "trainee_id": trainee_id,
-                "status": "pending",
+                "status": "pending_confirmation",
             }
             return {
                 "is_valid": False,
                 "status": "pending",
                 "missing_documents": required["missing_documents"],
+                "needs_confirmation": True,
                 "message": "Required documents are missing.",
             }
 
         return {
             "is_valid": True,
             "status": "ready_for_confirmation",
+            "needs_confirmation": True,
             "message": result.get("message", "Document accepted using local verification flow."),
             "source": result.get("source", "verification_agent"),
             "confidence": result.get("confidence", 0.0),

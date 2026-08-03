@@ -1,7 +1,9 @@
+import io
 import unittest
 from unittest.mock import patch
 
 from app.agents.verification_agent import VerificationAgent
+from app.main import create_app
 from app.functions import check_required_documents, get_trainee_record, update_verification_status
 from app.prompts import SYSTEM_PROMPT
 from app.services.llm_client import FakeLLMClient, LLMClient
@@ -101,6 +103,20 @@ class TestVerificationAgent(unittest.TestCase):
         approved = self.agent.run_agent_loop({"name": "Rahul", "id": "101", "documents": ["aadhaar", "resume", "degree_certificate"]}, confirmation=True)
         self.assertTrue(approved["is_verified"])
         self.assertEqual(approved["status"], "verified")
+
+    def test_upload_route_infers_document_names_from_filename(self):
+        app = create_app()
+        client = app.test_client()
+
+        response = client.post(
+            "/upload",
+            data={"file": (io.BytesIO(b"fake content"), "Ashwini Re.pdf")},
+            content_type="multipart/form-data",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["documents"], ["resume"])
 
     def test_llm_client_retries_after_tool_call(self):
         class FakeResponse:

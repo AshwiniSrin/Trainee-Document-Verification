@@ -47,7 +47,12 @@ class LLMClient:
             self.last_response = self._fallback_response(document)
             return self.last_response
 
+        use_real_llm = os.getenv("USE_REAL_LLM", "").strip().lower() in {"1", "true", "yes", "on"}
         if not self.api_key:
+            self.last_response = self._fallback_response(document)
+            return self.last_response
+
+        if not use_real_llm and self.api_key == "demo-key":
             self.last_response = self._fallback_response(document)
             return self.last_response
 
@@ -158,13 +163,23 @@ class LLMClient:
                 "source": "llm",
             }
         except (TypeError, ValueError):
-            return {
-                "is_valid": False,
-                "confidence": 0.0,
-                "message": content.strip() or "The LLM returned an unreadable response.",
-                "evidence": [],
-                "source": "llm",
-            }
+            try:
+                parsed = json.loads(content.strip().strip("`"))
+                return {
+                    "is_valid": bool(parsed.get("is_valid", False)),
+                    "confidence": parsed.get("confidence", 0.0),
+                    "message": parsed.get("message", "Document reviewed by LLM."),
+                    "evidence": parsed.get("evidence", []),
+                    "source": "llm",
+                }
+            except (TypeError, ValueError):
+                return {
+                    "is_valid": False,
+                    "confidence": 0.0,
+                    "message": content.strip() or "The LLM returned an unreadable response.",
+                    "evidence": [],
+                    "source": "llm",
+                }
 
     def _fallback_response(self, document, error=None):
         name = document.get("name") or document.get("full_name")

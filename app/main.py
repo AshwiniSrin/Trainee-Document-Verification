@@ -92,16 +92,32 @@ def create_app():
         filename = uploaded_file.filename or 'uploaded_document'
         file_extension = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
 
+        inferred_documents = []
+        lowered_name = filename.lower()
+        if 'resume' in lowered_name or ' cv' in lowered_name or lowered_name.endswith(' re.pdf') or lowered_name.endswith(' re.docx') or lowered_name.endswith(' re.txt'):
+            inferred_documents = ['resume']
+        elif 'aadhaar' in lowered_name or 'aadhar' in lowered_name or 'uid' in lowered_name:
+            inferred_documents = ['aadhaar']
+        elif 'pan' in lowered_name or 'permanent' in lowered_name:
+            inferred_documents = ['pan']
+        elif 'degree' in lowered_name or 'certificate' in lowered_name or 'marksheet' in lowered_name or 'transcript' in lowered_name or 'diploma' in lowered_name:
+            inferred_documents = ['degree_certificate']
+        elif file_extension:
+            inferred_documents = [file_extension]
+        else:
+            inferred_documents = ['unknown']
+
         document = {
             "name": uploaded_file.filename,
             "trainee_id": "TR001",
-            "documents": [file_extension] if file_extension else ["unknown"],
+            "documents": inferred_documents,
         }
 
         result = verification_agent.run_agent_loop(document)
         response = {
             "filename": filename,
             "file_type": file_extension,
+            "documents": inferred_documents,
             **result,
         }
         status_code = 200
