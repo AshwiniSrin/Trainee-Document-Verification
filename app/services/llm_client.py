@@ -82,8 +82,17 @@ class LLMClient:
             {
                 "role": "system",
                 "content": (
-                    "You are a document verification assistant. "
-                    "Return valid JSON with fields: is_valid, confidence, message, evidence."
+                    "You are a document verification assistant for trainee document validation. "
+                    "Review the supplied document metadata carefully and decide whether the record looks plausible and complete. "
+                    "Return valid JSON only with these exact fields: is_valid, confidence, message, evidence. "
+                    "Use booleans for is_valid, numbers between 0 and 1 for confidence, and a short explanation in message. "
+                    "Put supporting details in evidence as an array of short strings. "
+                    "Treat missing required fields as invalid. "
+                    "Treat obvious fake ID values, placeholder IDs, or suspicious patterns as invalid. "
+                    "Check whether the document type is supported and consistent with the provided metadata. "
+                    "Scoring style: use high confidence only for clearly strong matches, moderate confidence for partially complete records, and low confidence for ambiguous or weak evidence. "
+                    "If the details look missing, fake, inconsistent, or suspicious, set is_valid to false. "
+                    "If the data appears complete and credible, set is_valid to true."
                 ),
             },
             {

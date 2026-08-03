@@ -37,6 +37,32 @@ def create_app():
         result = verification_agent.verify_document(document)
         return jsonify(result)
 
+    @app.route('/upload', methods=['POST'])
+    def upload_document():
+        if 'file' not in request.files:
+            return jsonify({"is_valid": False, "message": "No file was uploaded."}), 400
+
+        uploaded_file = request.files['file']
+        if uploaded_file.filename == '':
+            return jsonify({"is_valid": False, "message": "No file was selected."}), 400
+
+        filename = uploaded_file.filename or 'uploaded_document'
+        file_extension = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+
+        document = {
+            "name": uploaded_file.filename,
+            "id": "uploaded-file",
+            "documents": [file_extension] if file_extension else ["unknown"],
+            "use_fake_data": True,
+        }
+
+        result = verification_agent.verify_document(document)
+        return jsonify({
+            "filename": filename,
+            "file_type": file_extension,
+            "result": result,
+        })
+
     return app
 
 

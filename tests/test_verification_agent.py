@@ -34,5 +34,19 @@ class TestVerificationAgent(unittest.TestCase):
         self.assertTrue(result['is_valid'])
         self.assertEqual(result['source'], 'demo')
 
+    def test_verify_document_reports_missing_required_documents(self):
+        document = {"name": "Rahul", "id": "101", "documents": ["aadhaar", "resume", "degree_certificate"]}
+        result = self.agent.verify_document(document)
+        self.assertFalse(result['is_valid'])
+        self.assertEqual(result['missing_documents'], ['pan'])
+        self.assertEqual(result['status'], 'pending')
+
+    def test_confirm_verification_marks_trainee_verified(self):
+        document = {"name": "Rahul", "id": "101", "documents": ["aadhaar", "resume", "degree_certificate", "pan"]}
+        self.agent.verify_document(document)
+        result = self.agent.confirm_verification(101)
+        self.assertTrue(result['is_verified'])
+        self.assertEqual(result['status'], 'verified')
+
 if __name__ == '__main__':
     unittest.main()
