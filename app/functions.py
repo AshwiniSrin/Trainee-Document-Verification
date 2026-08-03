@@ -19,6 +19,27 @@ def check_required_documents(documents):
         "complete": not missing_documents,
     }
 
+def verify_uploaded_documents(trainee_id, documents):
+    """
+    Validate uploaded documents.
+    This is a mock implementation.
+    Replace with OCR/database validation later.
+    """
+
+    verification_results = []
+
+    for document in documents or []:
+        verification_results.append({
+            "document": document,
+            "status": "Valid",
+            "remarks": "Document verified successfully."
+        })
+
+    return {
+        "trainee_id": str(trainee_id),
+        "verification_results": verification_results,
+        "overall_status": "verified"
+    }
 
 def update_verification_status(trainee_id, status="verified"):
     return {
@@ -27,3 +48,9 @@ def update_verification_status(trainee_id, status="verified"):
         "updated": True,
         "message": f"Verification status updated to {status}.",
     }
+TOOL_FUNCTIONS = {
+    "get_trainee_record": get_trainee_record,
+    "check_required_documents": check_required_documents,
+    "verify_uploaded_documents": verify_uploaded_documents,
+    "update_verification_status": update_verification_status,
+}
