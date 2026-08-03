@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+
 from app.agents.verification_agent import VerificationAgent
 from app.functions import check_required_documents, get_trainee_record, update_verification_status
 from app.prompts import SYSTEM_PROMPT
@@ -89,6 +91,55 @@ class TestVerificationAgent(unittest.TestCase):
         approved = self.agent.run_agent_loop({"name": "Rahul", "id": "101", "documents": ["aadhaar", "resume", "degree_certificate"]}, confirmation=True)
         self.assertTrue(approved["is_verified"])
         self.assertEqual(approved["status"], "verified")
+
+    def test_llm_client_retries_after_tool_call(self):
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self._payload
+
+        first_payload = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "check_required_documents",
+                                    "arguments": '{"documents": ["aadhaar"]}',
+                                },
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+        second_payload = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": '{"is_valid": true, "confidence": 0.9, "message": "Verified locally", "evidence": ["checked"], "source": "llm"}',
+                    }
+                }
+            ]
+        }
+
+        with patch("app.services.llm_client.requests.post", side_effect=[FakeResponse(first_payload), FakeResponse(second_payload)]):
+            client = LLMClient(api_key="demo-key")
+            result = client.send_request({"name": "Jane Doe", "id": "123456", "documents": ["aadhaar"]})
+
+        self.assertEqual(result["source"], "llm")
+        self.assertEqual(result["message"], "Verified locally")
+        self.assertEqual(result["confidence"], 0.9)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,5 +1,6 @@
 TOOL_SCHEMAS = [
     {
+        "name": "get_trainee_record",
         "type": "function",
         "function": {
             "name": "get_trainee_record",
@@ -22,6 +23,7 @@ TOOL_SCHEMAS = [
     },
 
     {
+        "name": "check_required_documents",
         "type": "function",
         "function": {
             "name": "check_required_documents",
@@ -49,6 +51,7 @@ TOOL_SCHEMAS = [
     },
 
     {
+        "name": "verify_uploaded_documents",
         "type": "function",
         "function": {
             "name": "verify_uploaded_documents",
@@ -81,6 +84,7 @@ TOOL_SCHEMAS = [
     },
 
     {
+        "name": "update_verification_status",
         "type": "function",
         "function": {
             "name": "update_verification_status",
