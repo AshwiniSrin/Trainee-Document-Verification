@@ -1,100 +1,130 @@
-# Trainee Document Verification System
+# Trainee Document Verification Agent
 
-This project implements a trainee document verification system using a language model. The system is designed to verify the authenticity of documents submitted by trainees, ensuring that all necessary information is accurate and valid.
+This project demonstrates an agent-style trainee document verification workflow. The system uses a Flask API, a verification agent, an LLM client, and tool-like functions to review trainee document submissions and decide whether verification should proceed or pause for confirmation.
 
-## Project Structure
+## What this project demonstrates
 
-```
-trainee-document-verification-agent
-├── app
-│   ├── __init__.py
-│   ├── main.py
-│   ├── config.py
-│   ├── agents
-│   │   ├── __init__.py
-│   │   └── verification_agent.py
-│   ├── services
-│   │   ├── __init__.py
-│   │   ├── llm_client.py
-│   │   └── document_verifier.py
-│   ├── models
-│   │   └── __init__.py
-│   └── utils
-│       └── __init__.py
-├── tests
-│   └── test_verification_agent.py
-├── requirements.txt
-├── .env.example
-└── README.md
+This is a demo-friendly implementation of an AI agent that can:
+
+1. Receive a verification request.
+2. Review the submitted document payload.
+3. Check required documents and trainee information.
+4. Decide whether it should ask for confirmation before changing status.
+5. Return a structured result to the caller.
+
+## Project structure
+
+```text
+app/
+├── agents/
+│   └── verification_agent.py
+├── services/
+│   ├── document_verifier.py
+│   └── llm_client.py
+├── functions.py
+├── prompts.py
+├── tools.py
+├── main.py
+└── config.py
+
+tests/
+└── test_verification_agent.py
 ```
 
 ## Installation
 
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   cd trainee-document-verification-agent
-   ```
+1. Install dependencies:
 
-2. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. Set up environment variables by copying `.env.example` to `.env` and filling in the necessary values.
-
-## Usage
-
-To run the application, execute the following command:
+```bash
+pip install -r requirements.txt
 ```
+
+2. Run the app:
+
+```bash
 python app/main.py
 ```
 
-## Features
+3. The app will be available at:
 
-- Document verification using a language model.
-- Validation of trainee data.
-- Modular architecture with separate components for agents, services, and utilities.
+```text
+http://127.0.0.1:5000/
+```
 
-## Simple Architecture Diagram
+## Agent workflow
 
 ```mermaid
 flowchart TD
-    A[User Uploads Documents] --> B[VerificationAgent]
-    B --> C[Prompt / System Instructions]
-    B --> D[Tool Layer]
-    D --> E[check_required_documents]
-    D --> F[get_trainee_record]
-    D --> G[update_verification_status]
-    B --> H[LLM / Verification Service]
-    B --> I[Confirmation Gate]
-    I -->|Approved| J[Status Updated to Verified]
-    I -->|Rejected| K[Verification Pending]
+    A[User Request] --> B[Flask API]
+    B --> C[VerificationAgent]
+    C --> D[DocumentVerifier]
+    C --> E[Tool Functions]
+    E --> F[check_required_documents]
+    E --> G[get_trainee_record]
+    E --> H[update_verification_status]
+    C --> I[LLM Reasoning Loop]
+    I --> J[Confirmation Gate]
+    J --> K[Final Response]
 ```
 
-## Demo Script
+## API usage
+
+### Verify documents
+
+Endpoint:
+
+```text
+POST /verify
+```
+
+Example request:
+
+```json
+{
+  "name": "Rahul Sharma",
+  "id": "101",
+  "documents": ["aadhaar", "resume", "degree_certificate"]
+}
+```
+
+Example response:
+
+```json
+{
+  "status": "pending",
+  "message": "Required documents are missing.",
+  "missing_documents": ["pan"],
+  "needs_confirmation": true
+}
+```
+
+### Confirm verification
+
+```json
+{
+  "name": "Rahul Sharma",
+  "id": "101",
+  "documents": ["aadhaar", "resume", "degree_certificate", "pan"],
+  "confirm": true
+}
+```
+
+## Sample demo script
 
 1. Start the app with `python app/main.py`.
-2. Submit a trainee document payload through the `/verify` endpoint.
-3. Observe that the agent checks the submitted documents and trainee record.
-4. See that it pauses for confirmation before changing the verification status.
-5. Confirm the action and observe the final verified state.
-
-## Assignment Summary
-
-This project demonstrates a simple agent-based document verification workflow. It uses a system prompt, tool-based actions, and a confirmation gate to make the verification process safer and easier to explain in a presentation.
+2. Send a verification request to `/verify` with a trainee ID and a few documents.
+3. Notice that the agent identifies which documents are missing.
+4. If the document set is complete, the agent pauses for confirmation before updating the status.
+5. Show the final response returned by the Flask API.
 
 ## Testing
 
-Unit tests for the `VerificationAgent` class can be found in the `tests/test_verification_agent.py` file. To run the tests, use:
+Run the regression tests with:
+
+```bash
+python -m pytest -q tests/test_verification_agent.py
 ```
-pytest tests
-```
 
-## Contributing
+## Notes
 
-Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
+This project intentionally uses mock data and mock tool behavior to keep the focus on the agent architecture, tool calling, reasoning loop, and confirmation flow rather than on production infrastructure.
