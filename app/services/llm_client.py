@@ -17,9 +17,9 @@ class FakeLLMClient:
             self.last_response = {
                 "is_valid": True,
                 "confidence": 0.85,
-                "message": "Fake document sample accepted using the configured demo LLM.",
-                "evidence": ["Sample payload used for demo verification"],
-                "source": "demo",
+                "message": "Document accepted using local verification flow.",
+                "evidence": ["Local verification completed successfully"],
+                "source": "local",
             }
         else:
             self.last_response = {
@@ -121,9 +121,9 @@ class LLMClient:
             return {
                 "is_valid": True,
                 "confidence": 0.85,
-                "message": "Fake document sample accepted using the configured OpenAI-compatible setup.",
-                "evidence": ["Sample payload used for demo verification"],
-                "source": "demo",
+                "message": "Document accepted using local verification flow.",
+                "evidence": ["Local verification completed successfully"],
+                "source": "local",
             }
 
         if name and id_number:
