@@ -39,7 +39,15 @@ def create_app():
             result = verification_agent.run_agent_loop(document, confirmation=True)
         else:
             result = verification_agent.run_agent_loop(document, confirmation=False)
-        return jsonify(result)
+
+        response = {
+            "status": result.get("status", "pending"),
+            "verified": result.get("is_verified", False) or result.get("status") == "verified",
+            "message": result.get("message", "Verification completed."),
+            "missing_documents": result.get("missing_documents", []),
+            "trainee_id": document.get("id") or document.get("trainee_id") or document.get("id_number"),
+        }
+        return jsonify(response)
 
     @app.route('/upload', methods=['POST'])
     def upload_document():
@@ -61,11 +69,15 @@ def create_app():
         }
 
         result = verification_agent.verify_document(document)
-        return jsonify({
+        response = {
             "filename": filename,
             "file_type": file_extension,
-            "result": result,
-        })
+            "status": result.get("status", "pending"),
+            "verified": result.get("is_valid", False) and result.get("status") != "pending",
+            "message": result.get("message", "Verification completed."),
+            "missing_documents": result.get("missing_documents", []),
+        }
+        return jsonify(response)
 
     return app
 
