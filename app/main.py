@@ -34,7 +34,11 @@ def create_app():
             })
 
         document = request.get_json(silent=True) or {}
-        result = verification_agent.verify_document(document)
+        confirmation = bool(document.get("confirmation"))
+        if confirmation or document.get("confirm"):
+            result = verification_agent.run_agent_loop(document, confirmation=True)
+        else:
+            result = verification_agent.run_agent_loop(document, confirmation=False)
         return jsonify(result)
 
     @app.route('/upload', methods=['POST'])
