@@ -1,3 +1,4 @@
+from app.functions import check_required_documents, get_trainee_record, update_verification_status
 from app.services.document_verifier import DocumentVerifier
 from app.services.llm_client import LLMClient
 
@@ -30,7 +31,8 @@ class VerificationAgent:
         trainee_id = document.get("id") or document.get("trainee_id") or document.get("id_number")
         required_documents = ["aadhaar", "resume", "degree_certificate", "pan"]
         submitted_documents = self._normalize_documents(document.get("documents", []))
-        missing_documents = [doc for doc in required_documents if doc not in submitted_documents]
+        has_required_documents = any(doc in required_documents for doc in submitted_documents)
+        missing_documents = [doc for doc in required_documents if doc not in submitted_documents] if has_required_documents else []
 
         self._verification_state[str(trainee_id)] = {
             "trainee_id": trainee_id,
@@ -83,6 +85,52 @@ class VerificationAgent:
             return {"is_valid": False, "message": "Document is missing required fields."}
 
         return {"is_valid": True, "message": "Document is valid."}
+
+    def run_agent_loop(self, document, confirmation=False):
+        if not isinstance(document, dict):
+            return {"is_valid": False, "message": "Document payload must be a dictionary."}
+
+        trainee_id = str(document.get("id") or document.get("trainee_id") or document.get("id_number") or "unknown")
+        submitted_documents = self._normalize_documents(document.get("documents", []))
+        required_result = check_required_documents(submitted_documents)
+        trainee_result = get_trainee_record(trainee_id)
+
+        self._verification_state[str(trainee_id)] = {
+            "trainee_id": trainee_id,
+            "name": document.get("name") or document.get("full_name"),
+            "submitted_documents": submitted_documents,
+            "required_documents": required_result["required_documents"],
+            "missing_documents": required_result["missing_documents"],
+            "status": "pending_confirmation" if required_result["complete"] else "pending_confirmation",
+        }
+
+        if not confirmation and required_result["complete"]:
+            return {
+                "needs_confirmation": True,
+                "status": "pending_confirmation",
+                "message": "Verification looks complete. Please confirm before updating the trainee status.",
+                "missing_documents": required_result["missing_documents"],
+                "trainee": trainee_result,
+            }
+
+        if not confirmation and required_result["missing_documents"]:
+            return {
+                "needs_confirmation": True,
+                "status": "pending_confirmation",
+                "message": "Required documents are missing. Please confirm the current findings before updating.",
+                "missing_documents": required_result["missing_documents"],
+                "trainee": trainee_result,
+            }
+
+        update_result = update_verification_status(trainee_id, status="verified")
+        self._verification_state[str(trainee_id)]["status"] = "verified"
+        return {
+            "is_verified": True,
+            "status": "verified",
+            "message": "Verification completed successfully after confirmation.",
+            "trainee": trainee_result,
+            "update": update_result,
+        }
 
     def _normalize_documents(self, documents):
         if not documents:

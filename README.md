@@ -56,6 +56,34 @@ python app/main.py
 - Validation of trainee data.
 - Modular architecture with separate components for agents, services, and utilities.
 
+## Simple Architecture Diagram
+
+```mermaid
+flowchart TD
+    A[User Uploads Documents] --> B[VerificationAgent]
+    B --> C[Prompt / System Instructions]
+    B --> D[Tool Layer]
+    D --> E[check_required_documents]
+    D --> F[get_trainee_record]
+    D --> G[update_verification_status]
+    B --> H[LLM / Verification Service]
+    B --> I[Confirmation Gate]
+    I -->|Approved| J[Status Updated to Verified]
+    I -->|Rejected| K[Verification Pending]
+```
+
+## Demo Script
+
+1. Start the app with `python app/main.py`.
+2. Submit a trainee document payload through the `/verify` endpoint.
+3. Observe that the agent checks the submitted documents and trainee record.
+4. See that it pauses for confirmation before changing the verification status.
+5. Confirm the action and observe the final verified state.
+
+## Assignment Summary
+
+This project demonstrates a simple agent-based document verification workflow. It uses a system prompt, tool-based actions, and a confirmation gate to make the verification process safer and easier to explain in a presentation.
+
 ## Testing
 
 Unit tests for the `VerificationAgent` class can be found in the `tests/test_verification_agent.py` file. To run the tests, use:
