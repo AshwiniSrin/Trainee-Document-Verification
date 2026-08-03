@@ -19,6 +19,7 @@ def check_required_documents(documents):
         "complete": not missing_documents,
     }
 
+
 def verify_uploaded_documents(trainee_id, documents):
     """
     Validate uploaded documents.
@@ -41,13 +42,26 @@ def verify_uploaded_documents(trainee_id, documents):
         "overall_status": "verified"
     }
 
-def update_verification_status(trainee_id, status="verified"):
+
+def update_verification_status(trainee_id, status="verified", confirmed=False):
+    if not confirmed:
+        return {
+            "success": False,
+            "requires_confirmation": True,
+            "message": (
+                f"Updating trainee {trainee_id} to '{status}' requires user confirmation."
+            ),
+        }
+
     return {
+        "success": True,
         "trainee_id": str(trainee_id),
         "status": status,
         "updated": True,
         "message": f"Verification status updated to {status}.",
     }
+
+
 TOOL_FUNCTIONS = {
     "get_trainee_record": get_trainee_record,
     "check_required_documents": check_required_documents,

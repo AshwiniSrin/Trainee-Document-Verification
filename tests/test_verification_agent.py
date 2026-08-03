@@ -80,8 +80,18 @@ class TestVerificationAgent(unittest.TestCase):
         self.assertEqual(trainee_result["trainee_id"], "101")
 
         update_result = update_verification_status("101", status="verified")
-        self.assertTrue(update_result["updated"])
-        self.assertEqual(update_result["status"], "verified")
+        self.assertFalse(update_result["success"])
+        self.assertTrue(update_result["requires_confirmation"])
+
+        confirmed_result = update_verification_status("101", status="verified", confirmed=True)
+        self.assertTrue(confirmed_result["success"])
+        self.assertEqual(confirmed_result["status"], "verified")
+
+    def test_update_verification_status_schema_allows_confirmation_flag(self):
+        update_schema = next(tool for tool in TOOL_SCHEMAS if tool["name"] == "update_verification_status")
+        properties = update_schema["function"]["parameters"]["properties"]
+        self.assertIn("confirmed", properties)
+        self.assertEqual(properties["confirmed"]["type"], "boolean")
 
     def test_run_agent_loop_requests_confirmation_before_update(self):
         pending = self.agent.run_agent_loop({"name": "Rahul", "id": "101", "documents": ["aadhaar", "resume", "degree_certificate"]})
@@ -140,6 +150,119 @@ class TestVerificationAgent(unittest.TestCase):
         self.assertEqual(result["source"], "llm")
         self.assertEqual(result["message"], "Verified locally")
         self.assertEqual(result["confidence"], 0.9)
+
+    def test_llm_client_reports_unknown_tool(self):
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self._payload
+
+        first_payload = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_unknown",
+                                "type": "function",
+                                "function": {
+                                    "name": "missing_tool",
+                                    "arguments": '{}',
+                                },
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+        second_payload = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": '{"is_valid": true, "confidence": 0.8, "message": "Handled missing tool", "evidence": ["tool fallback"], "source": "llm"}',
+                    }
+                }
+            ]
+        }
+
+        calls = []
+
+        def fake_post(*args, **kwargs):
+            calls.append(kwargs["json"])
+            return FakeResponse(first_payload if len(calls) == 1 else second_payload)
+
+        with patch("app.services.llm_client.requests.post", side_effect=fake_post):
+            client = LLMClient(api_key="demo-key")
+            result = client.send_request({"name": "Jane Doe", "id": "123456", "documents": ["aadhaar"]})
+
+        self.assertEqual(result["message"], "Handled missing tool")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("tool", calls[1]["messages"][-1]["role"])
+        self.assertIn("Unknown tool 'missing_tool'", calls[1]["messages"][-1]["content"])
+
+    def test_llm_client_handles_tool_exception(self):
+        class FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self._payload
+
+        first_payload = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_error",
+                                "type": "function",
+                                "function": {
+                                    "name": "broken_tool",
+                                    "arguments": '{}',
+                                },
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+        second_payload = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": '{"is_valid": true, "confidence": 0.8, "message": "Recovered from tool error", "evidence": ["tool fallback"], "source": "llm"}',
+                    }
+                }
+            ]
+        }
+
+        calls = []
+
+        def fake_post(*args, **kwargs):
+            calls.append(kwargs["json"])
+            return FakeResponse(first_payload if len(calls) == 1 else second_payload)
+
+        with patch("app.services.llm_client.TOOL_FUNCTIONS", {"broken_tool": lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom"))}):
+            with patch("app.services.llm_client.requests.post", side_effect=fake_post):
+                client = LLMClient(api_key="demo-key")
+                result = client.send_request({"name": "Jane Doe", "id": "123456", "documents": ["aadhaar"]})
+
+        self.assertEqual(result["message"], "Recovered from tool error")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("tool", calls[1]["messages"][-1]["role"])
+        self.assertIn("boom", calls[1]["messages"][-1]["content"])
 
 if __name__ == '__main__':
     unittest.main()

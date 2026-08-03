@@ -1,9 +1,13 @@
+import logging
 import sys
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from flask import Flask, jsonify, request, render_template
 from app.config import Config
@@ -33,21 +37,48 @@ def create_app():
                 },
             })
 
-        document = request.get_json(silent=True) or {}
-        confirmation = bool(document.get("confirmation"))
-        if confirmation or document.get("confirm"):
-            result = verification_agent.run_agent_loop(document, confirmation=True)
-        else:
-            result = verification_agent.run_agent_loop(document, confirmation=False)
+        document = request.get_json(silent=True)
+        logger.info("Verification request received")
+        logger.info(document)
+
+        if not document:
+            return jsonify({
+                "status": "error",
+                "message": "No JSON payload received.",
+            }), 400
+
+        confirmation = bool(
+            document.get("confirmation") or document.get("confirm", False)
+        )
+
+        try:
+            result = verification_agent.run_agent_loop(
+                document,
+                confirmation=confirmation,
+            )
+        except Exception as exc:
+            logger.exception("Verification request failed")
+            return jsonify({
+                "status": "error",
+                "message": str(exc),
+            }), 500
+
+        logger.info(result)
 
         response = {
-            "status": result.get("status", "pending"),
-            "verified": result.get("is_verified", False) or result.get("status") == "verified",
-            "message": result.get("message", "Verification completed."),
-            "missing_documents": result.get("missing_documents", []),
-            "trainee_id": document.get("id") or document.get("trainee_id") or document.get("id_number"),
+            **result,
+            "trainee_id": document.get("trainee_id")
+            or document.get("id")
+            or document.get("id_number"),
         }
-        return jsonify(response)
+
+        status_code = 200
+        if response.get("status") == "pending":
+            status_code = 202
+        elif response.get("status") == "rejected":
+            status_code = 400
+
+        return jsonify(response), status_code
 
     @app.route('/upload', methods=['POST'])
     def upload_document():
@@ -63,21 +94,22 @@ def create_app():
 
         document = {
             "name": uploaded_file.filename,
-            "id": "uploaded-file",
+            "trainee_id": "TR001",
             "documents": [file_extension] if file_extension else ["unknown"],
-            "use_fake_data": True,
         }
 
-        result = verification_agent.verify_document(document)
+        result = verification_agent.run_agent_loop(document)
         response = {
             "filename": filename,
             "file_type": file_extension,
-            "status": result.get("status", "pending"),
-            "verified": result.get("is_valid", False) and result.get("status") != "pending",
-            "message": result.get("message", "Verification completed."),
-            "missing_documents": result.get("missing_documents", []),
+            **result,
         }
-        return jsonify(response)
+        status_code = 200
+        if response.get("status") == "pending":
+            status_code = 202
+        elif response.get("status") == "rejected":
+            status_code = 400
+        return jsonify(response), status_code
 
     return app
 

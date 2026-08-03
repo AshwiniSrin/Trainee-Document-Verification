@@ -53,12 +53,12 @@ class LLMClient:
 
         try:
             messages = self._build_messages(document)
-            max_iterations = 3
+            max_iterations = int(os.getenv("MAX_AGENT_ITERATIONS", "5"))
 
             for _ in range(max_iterations):
                 payload = {
                     "model": self.model,
-                    "messages": messages,
+                    "messages": list(messages),
                     "tools": TOOL_SCHEMAS,
                     "tool_choice": "auto",
                     "temperature": 0.2,
@@ -77,33 +77,52 @@ class LLMClient:
                 message = data["choices"][0]["message"]
                 messages.append(message)
 
-                if not message.get("tool_calls"):
+                tool_calls = message.get("tool_calls", [])
+
+                if not tool_calls:
                     content = message.get("content", "")
                     self.last_response = self._parse_response(content)
                     return self.last_response
 
-                tool_results = []
-                for tool_call in message["tool_calls"]:
+                for tool_call in tool_calls:
                     tool_name = tool_call["function"]["name"]
-                    arguments = json.loads(tool_call["function"]["arguments"])
+
+                    try:
+                        arguments = json.loads(tool_call["function"]["arguments"])
+                    except json.JSONDecodeError:
+                        arguments = {}
+
                     if tool_name not in TOOL_FUNCTIONS:
-                        tool_results.append({"error": f"Unknown tool: {tool_name}"})
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call["id"],
+                                "name": tool_name,
+                                "content": json.dumps({"error": f"Unknown tool '{tool_name}'"}),
+                            }
+                        )
                         continue
 
-                    result = TOOL_FUNCTIONS[tool_name](**arguments)
-                    tool_results.append({"tool": tool_name, "result": result})
+                    try:
+                        result = TOOL_FUNCTIONS[tool_name](**arguments)
+                    except Exception as exc:
+                        result = {"error": str(exc)}
+
                     messages.append(
                         {
                             "role": "tool",
                             "tool_call_id": tool_call["id"],
+                            "name": tool_name,
                             "content": json.dumps(result),
                         }
                     )
 
             self.last_response = {
-                "tool_calls": tool_results,
+                "is_valid": False,
+                "confidence": 0.0,
+                "message": "Maximum reasoning iterations reached.",
+                "evidence": [],
                 "source": "agent",
-                "message": "Agent loop completed without a final text response.",
             }
             return self.last_response
         except (requests.RequestException, KeyError, ValueError, TimeoutError) as exc:

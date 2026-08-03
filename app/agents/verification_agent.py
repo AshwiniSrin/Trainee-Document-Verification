@@ -8,8 +8,12 @@ class VerificationAgent:
         self.llm_client = llm_client or LLMClient()
         self.document_verifier = document_verifier or DocumentVerifier(self.llm_client)
         self._verification_state = {}
+        self.pending_verification = None
 
     def verify_document(self, document):
+        """
+        Verify trainee documents using the DocumentVerifier and the required-document checks.
+        """
         if document is None:
             document = {}
 
@@ -21,6 +25,7 @@ class VerificationAgent:
                 "name": document.get("name", "Jane Doe"),
                 "id_number": document.get("id_number", "FAKE-12345"),
                 "document_type": document.get("document_type", "id_card"),
+                "documents": document.get("documents", ["id_card"]),
                 "use_fake_data": True,
             }
 
@@ -28,50 +33,43 @@ class VerificationAgent:
         if not validation_result["is_valid"]:
             return validation_result
 
-        trainee_id = document.get("id") or document.get("trainee_id") or document.get("id_number")
-        required_documents = ["aadhaar", "resume", "degree_certificate", "pan"]
+        result = self.document_verifier.process_document(document)
+        if not result.get("is_valid", False):
+            return result
+
         submitted_documents = self._normalize_documents(document.get("documents", []))
-        has_required_documents = any(doc in required_documents for doc in submitted_documents)
-        missing_documents = [doc for doc in required_documents if doc not in submitted_documents] if has_required_documents else []
+        required = check_required_documents(submitted_documents)
+        trainee_id = document.get("id") or document.get("trainee_id") or document.get("id_number")
+        required_document_types = {"aadhaar", "resume", "degree_certificate", "pan"}
+        has_required_document = any(doc in required_document_types for doc in submitted_documents)
 
         self._verification_state[str(trainee_id)] = {
             "trainee_id": trainee_id,
             "name": document.get("name") or document.get("full_name"),
             "submitted_documents": submitted_documents,
-            "missing_documents": missing_documents,
-            "status": "pending" if missing_documents else "ready",
+            "missing_documents": required["missing_documents"],
+            "status": "pending" if has_required_document and required["missing_documents"] else "ready_for_confirmation",
         }
 
-        if missing_documents:
+        if has_required_document and required["missing_documents"]:
+            self.pending_verification = {
+                "trainee_id": trainee_id,
+                "status": "pending",
+            }
             return {
                 "is_valid": False,
-                "confidence": 0.55,
-                "message": "Required documents are missing. Please upload the missing files.",
-                "evidence": [f"Missing: {', '.join(missing_documents)}"],
-                "missing_documents": missing_documents,
                 "status": "pending",
-                "source": "verification_agent",
+                "missing_documents": required["missing_documents"],
+                "message": "Required documents are missing.",
             }
 
-        verification_result = self.document_verifier.process_document(document)
-        verification_result.update({
-            "missing_documents": [],
-            "status": "ready",
-            "source": verification_result.get("source", "verification_agent"),
-        })
-        return verification_result
-
-    def confirm_verification(self, trainee_id):
-        state = self._verification_state.get(str(trainee_id))
-        if not state:
-            return {"is_verified": False, "status": "unknown", "message": "No verification state found for this trainee."}
-
-        state["status"] = "verified"
         return {
-            "is_verified": True,
-            "status": "verified",
-            "message": f"Verification completed successfully for trainee {trainee_id}.",
-            "trainee_id": trainee_id,
+            "is_valid": True,
+            "status": "ready_for_confirmation",
+            "message": result.get("message", "Document accepted using local verification flow."),
+            "source": result.get("source", "verification_agent"),
+            "confidence": result.get("confidence", 0.0),
+            "evidence": result.get("evidence", []),
         }
 
     def validate_data(self, document):
@@ -85,6 +83,19 @@ class VerificationAgent:
             return {"is_valid": False, "message": "Document is missing required fields."}
 
         return {"is_valid": True, "message": "Document is valid."}
+
+    def confirm_verification(self, trainee_id):
+        state = self._verification_state.get(str(trainee_id))
+        if not state:
+            return {"is_verified": False, "status": "unknown", "message": "No verification state found for this trainee."}
+
+        state["status"] = "verified"
+        return {
+            "is_verified": True,
+            "status": "verified",
+            "message": f"Verification completed successfully for trainee {trainee_id}.",
+            "trainee_id": trainee_id,
+        }
 
     def run_agent_loop(self, document, confirmation=False):
         if not isinstance(document, dict):
@@ -101,7 +112,7 @@ class VerificationAgent:
             "submitted_documents": submitted_documents,
             "required_documents": required_result["required_documents"],
             "missing_documents": required_result["missing_documents"],
-            "status": "pending_confirmation" if required_result["complete"] else "pending_confirmation",
+            "status": "pending_confirmation",
         }
 
         if not confirmation and required_result["complete"]:
@@ -122,7 +133,7 @@ class VerificationAgent:
                 "trainee": trainee_result,
             }
 
-        update_result = update_verification_status(trainee_id, status="verified")
+        update_result = update_verification_status(trainee_id, status="verified", confirmed=confirmation)
         self._verification_state[str(trainee_id)]["status"] = "verified"
         return {
             "is_verified": True,
@@ -142,3 +153,8 @@ class VerificationAgent:
             if isinstance(document, str):
                 normalized.append(document.strip().lower())
         return normalized
+
+    def _should_block_for_missing_documents(self, submitted_documents, missing_documents):
+        if not submitted_documents:
+            return True
+        return bool(missing_documents)

@@ -107,6 +107,10 @@ TOOL_SCHEMAS = [
                             "Verification status such as VERIFIED, "
                             "PENDING, REJECTED, or INCOMPLETE."
                         )
+                    },
+                    "confirmed": {
+                        "type": "boolean",
+                        "description": "True only after explicit user approval."
                     }
                 },
                 "required": [
