@@ -1,0 +1,6 @@
+{
+  "name": "Jane Doe",
+  "id": "123456",
+  "documents": ["id_card"],
+  "use_fake_data": true
+}

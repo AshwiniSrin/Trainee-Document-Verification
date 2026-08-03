@@ -41,6 +41,10 @@ class LLMClient:
         self.last_response = None
 
     def send_request(self, document):
+        if isinstance(document, dict) and document.get("use_fake_data"):
+            self.last_response = self._fallback_response(document)
+            return self.last_response
+
         if not self.api_key:
             self.last_response = self._fallback_response(document)
             return self.last_response
