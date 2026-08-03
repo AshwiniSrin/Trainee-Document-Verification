@@ -3,12 +3,41 @@ import os
 import urllib.error
 import urllib.request
 
+import requests
+
+
+class FakeLLMClient:
+    def __init__(self):
+        self.last_response = None
+
+    def send_request(self, document):
+        if isinstance(document, dict) and document.get("use_fake_data"):
+            self.last_response = {
+                "is_valid": True,
+                "confidence": 0.85,
+                "message": "Fake document sample accepted using the configured demo LLM.",
+                "evidence": ["Sample payload used for demo verification"],
+                "source": "demo",
+            }
+        else:
+            self.last_response = {
+                "is_valid": True,
+                "confidence": 0.6,
+                "message": "Fake LLM accepted the document payload.",
+                "evidence": ["Local fake response"],
+                "source": "demo",
+            }
+        return self.last_response
+
+    def receive_response(self):
+        return self.last_response
+
 
 class LLMClient:
     def __init__(self, api_key=None, model=None, api_base=None):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        self.api_base = (api_base or os.getenv("OPENAI_API_BASE") or "https://api.openai.com/v1").rstrip("/")
+        self.api_base = (api_base or os.getenv("OPENAI_API_BASE") or os.getenv("API_URL") or "https://api.openai.com/v1").rstrip("/")
         self.last_response = None
 
     def send_request(self, document):
@@ -22,22 +51,22 @@ class LLMClient:
                 "messages": self._build_messages(document),
                 "temperature": 0.2,
             }
-            request = urllib.request.Request(
+            response = requests.post(
                 f"{self.api_base}/chat/completions",
-                data=json.dumps(payload).encode("utf-8"),
+                json=payload,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
-                method="POST",
+                timeout=30,
             )
-            with urllib.request.urlopen(request, timeout=30) as response:
-                data = json.load(response)
+            response.raise_for_status()
+            data = response.json()
 
             content = data["choices"][0]["message"]["content"]
             self.last_response = self._parse_response(content)
             return self.last_response
-        except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError, TimeoutError) as exc:
+        except (requests.RequestException, KeyError, ValueError, TimeoutError) as exc:
             self.last_response = self._fallback_response(document, error=str(exc))
             return self.last_response
 
