@@ -117,6 +117,26 @@ class VerificationAgent:
             "status": "pending_confirmation",
         }
 
+        if confirmation:
+            stored_state = self._verification_state.get(str(trainee_id), {})
+            if stored_state.get("missing_documents"):
+                return {
+                    "needs_confirmation": False,
+                    "status": "pending_confirmation",
+                    "message": "Cannot confirm verification while required documents are missing.",
+                    "missing_documents": stored_state.get("missing_documents", []),
+                    "trainee": trainee_result,
+                }
+
+            verified_result = self.confirm_verification(trainee_id)
+            return {
+                "is_verified": verified_result.get("is_verified", False),
+                "status": verified_result.get("status", "verified"),
+                "message": verified_result.get("message"),
+                "trainee": trainee_result,
+                "update": update_verification_status(trainee_id, status="verified", confirmed=True),
+            }
+
         if not confirmation and required_result["complete"]:
             return {
                 "needs_confirmation": True,

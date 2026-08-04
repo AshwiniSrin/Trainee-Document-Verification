@@ -118,10 +118,24 @@ def create_app():
         }
 
         result = verification_agent.run_agent_loop(document)
+        display_labels = {
+            "resume": "Resume",
+            "aadhaar": "Aadhaar Card",
+            "pan": "PAN Card",
+            "degree_certificate": "Degree Certificate",
+        }
+        raw_missing = result.get("missing_documents", [])
+        missing_labels = [
+            display_labels.get(doc, doc.replace('_', ' ').title())
+            for doc in raw_missing
+        ]
+
         response = {
-            "filenames": uploaded_filenames,
-            "documents": inferred_documents,
             **result,
+            "uploaded_documents": uploaded_filenames,
+            "missing_document_keys": raw_missing,
+            "missing_documents": missing_labels,
+            "document_keys": inferred_documents,
         }
         status_code = 200
         if response.get("status") == "pending":
