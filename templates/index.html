@@ -4,36 +4,74 @@
     <meta charset="utf-8" />
     <title>Verification Agent Test</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 2rem; }
-      button { padding: 0.6rem 1rem; cursor: pointer; }
-      pre { background: #f5f5f5; padding: 1rem; white-space: pre-wrap; }
+      body { font-family: Arial, sans-serif; margin: 2rem; background: #f7f9fc; color: #222; }
+      .container { max-width: 700px; margin: 0 auto; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+      button { padding: 0.7rem 1rem; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 6px; }
+      button:hover { background: #1d4ed8; }
       .row { margin-bottom: 1rem; }
+      label { display: block; font-weight: 600; margin-bottom: 0.3rem; }
+      input[type="text"], input[type="file"] { width: 100%; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 6px; }
+      .message-box { background: #f5f5f5; padding: 1rem; border-radius: 6px; white-space: pre-wrap; border-left: 5px solid #94a3b8; }
+      .message-box.success { border-left-color: #16a34a; background: #f0fdf4; }
+      .message-box.error { border-left-color: #dc2626; background: #fef2f2; }
+      .status { font-weight: bold; margin-bottom: 0.5rem; }
+      .hidden { display: none; }
+      .hint { font-size: 0.9rem; color: #475569; margin-top: 0.35rem; }
     </style>
   </head>
   <body>
-    <h1>Verification Agent Test</h1>
-    <form id="upload-form" onsubmit="event.preventDefault(); sendRequest();">
-      <div class="row">
-        <label for="file">Upload document</label>
-        <input id="file" name="file" type="file" />
+    <div class="container">
+      <h1>Verification Agent Test</h1>
+      <form id="upload-form" onsubmit="event.preventDefault(); sendRequest();">
+        <div class="row">
+          <label for="name">Trainee Name</label>
+          <input id="name" name="name" type="text" value="Ashwini Re" />
+        </div>
+        <div class="row">
+          <label for="trainee_id">Trainee ID</label>
+          <input id="trainee_id" name="trainee_id" type="text" value="TR001" />
+        </div>
+        <div class="row">
+          <label for="files">Upload documents</label>
+          <input id="files" name="files" type="file" multiple />
+          <div class="hint">Choose one or more files. If a required document is missing, upload the missing files and click Upload Documents again.</div>
+        </div>
+        <div class="row">
+          <button type="submit">Upload Documents</button>
+        </div>
+      </form>
+      <div id="retry-section" class="hidden">
+        <h2>Upload Missing Documents</h2>
+        <div class="row">
+          <label for="retry_files">Select missing document(s)</label>
+          <input id="retry_files" name="retry_files" type="file" multiple />
+          <div class="hint">Upload only the missing document(s) and click Re-upload.</div>
+        </div>
+        <div class="row">
+          <button type="button" onclick="sendRetryRequest()">Re-upload Missing Documents</button>
+        </div>
       </div>
-      <div class="row">
-        <button type="submit">Upload and process</button>
-      </div>
-    </form>
-    <h2>Response</h2>
-    <pre id="output">Waiting...</pre>
+      <h2>Response</h2>
+      <div id="output" class="message-box">Waiting...</div>
+    </div>
 
     <script>
       async function sendRequest() {
         const output = document.getElementById('output');
-        const fileInput = document.getElementById('file');
+        const retrySection = document.getElementById('retry-section');
+        const fileInput = document.getElementById('files');
+        const nameInput = document.getElementById('name');
+        const traineeIdInput = document.getElementById('trainee_id');
         output.textContent = 'Sending...';
+        output.className = 'message-box';
+        retrySection.classList.add('hidden');
 
         try {
           const formData = new FormData();
-          if (fileInput.files.length > 0) {
-            formData.append('file', fileInput.files[0]);
+          formData.append('name', nameInput.value);
+          formData.append('trainee_id', traineeIdInput.value);
+          for (const file of fileInput.files) {
+            formData.append('files', file);
           }
 
           const response = await fetch('/upload', {
@@ -42,9 +80,88 @@
           });
 
           const data = await response.json();
-          output.textContent = JSON.stringify(data, null, 2);
+          const status = (data.status || 'Completed').toString();
+          const message = data.message || 'Verification completed.';
+          const missing = data.missing_documents && data.missing_documents.length > 0
+            ? `Missing documents: ${data.missing_documents.join(', ')}`
+            : 'Missing documents: none';
+          const filenames = data.filenames && data.filenames.length > 0
+            ? `Uploaded files: ${data.filenames.join(', ')}`
+            : '';
+          const retryNote = data.missing_documents && data.missing_documents.length > 0
+            ? '<div>Please upload the missing documents and submit again.</div>'
+            : '';
+
+          output.innerHTML = `
+            <div class="status">Status: ${status}</div>
+            <div>${message}</div>
+            <div>${filenames}</div>
+            <div>${missing}</div>
+            ${retryNote}
+          `;
+          output.className = `message-box ${status === 'pending' || status === 'error' ? 'error' : 'success'}`;
+
+          if (data.missing_documents && data.missing_documents.length > 0) {
+            retrySection.classList.remove('hidden');
+          }
         } catch (error) {
           output.textContent = 'Error: ' + error.message;
+          output.className = 'message-box error';
+        }
+      }
+
+      async function sendRetryRequest() {
+        const output = document.getElementById('output');
+        const retrySection = document.getElementById('retry-section');
+        const fileInput = document.getElementById('retry_files');
+        const nameInput = document.getElementById('name');
+        const traineeIdInput = document.getElementById('trainee_id');
+        output.textContent = 'Re-uploading missing documents...';
+        output.className = 'message-box';
+
+        try {
+          const formData = new FormData();
+          formData.append('name', nameInput.value);
+          formData.append('trainee_id', traineeIdInput.value);
+          for (const file of fileInput.files) {
+            formData.append('files', file);
+          }
+
+          const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          const data = await response.json();
+          const status = (data.status || 'Completed').toString();
+          const message = data.message || 'Verification completed.';
+          const missing = data.missing_documents && data.missing_documents.length > 0
+            ? `Missing documents: ${data.missing_documents.join(', ')}`
+            : 'Missing documents: none';
+          const filenames = data.filenames && data.filenames.length > 0
+            ? `Uploaded files: ${data.filenames.join(', ')}`
+            : '';
+          const retryNote = data.missing_documents && data.missing_documents.length > 0
+            ? '<div>Please upload the missing documents and submit again.</div>'
+            : '';
+
+          output.innerHTML = `
+            <div class="status">Status: ${status}</div>
+            <div>${message}</div>
+            <div>${filenames}</div>
+            <div>${missing}</div>
+            ${retryNote}
+          `;
+          output.className = `message-box ${status === 'pending' || status === 'error' ? 'error' : 'success'}`;
+
+          if (data.missing_documents && data.missing_documents.length > 0) {
+            retrySection.classList.remove('hidden');
+          } else {
+            retrySection.classList.add('hidden');
+          }
+        } catch (error) {
+          output.textContent = 'Error: ' + error.message;
+          output.className = 'message-box error';
         }
       }
     </script>

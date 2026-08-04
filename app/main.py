@@ -82,41 +82,44 @@ def create_app():
 
     @app.route('/upload', methods=['POST'])
     def upload_document():
-        if 'file' not in request.files:
-            return jsonify({"is_valid": False, "message": "No file was uploaded."}), 400
+        uploaded_files = request.files.getlist('files')
+        if not uploaded_files:
+            return jsonify({"is_valid": False, "message": "No files were uploaded."}), 400
 
-        uploaded_file = request.files['file']
-        if uploaded_file.filename == '':
+        files = [file for file in uploaded_files if file.filename]
+        if not files:
             return jsonify({"is_valid": False, "message": "No file was selected."}), 400
 
-        filename = uploaded_file.filename or 'uploaded_document'
-        file_extension = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        trainee_id = request.form.get('trainee_id') or 'TR001'
+        document_name = request.form.get('name') or 'Uploaded Documents'
 
         inferred_documents = []
-        lowered_name = filename.lower()
-        if 'resume' in lowered_name or ' cv' in lowered_name or lowered_name.endswith(' re.pdf') or lowered_name.endswith(' re.docx') or lowered_name.endswith(' re.txt'):
-            inferred_documents = ['resume']
-        elif 'aadhaar' in lowered_name or 'aadhar' in lowered_name or 'uid' in lowered_name:
-            inferred_documents = ['aadhaar']
-        elif 'pan' in lowered_name or 'permanent' in lowered_name:
-            inferred_documents = ['pan']
-        elif 'degree' in lowered_name or 'certificate' in lowered_name or 'marksheet' in lowered_name or 'transcript' in lowered_name or 'diploma' in lowered_name:
-            inferred_documents = ['degree_certificate']
-        elif file_extension:
-            inferred_documents = [file_extension]
-        else:
-            inferred_documents = ['unknown']
+        uploaded_filenames = []
+        for uploaded_file in files:
+            filename = uploaded_file.filename or 'uploaded_document'
+            uploaded_filenames.append(filename)
+            lowered_name = filename.lower()
+            if 'resume' in lowered_name or ' cv' in lowered_name or lowered_name.endswith(' re.pdf') or lowered_name.endswith(' re.docx') or lowered_name.endswith(' re.txt'):
+                inferred_documents.append('resume')
+            elif 'aadhaar' in lowered_name or 'aadhar' in lowered_name or 'uid' in lowered_name:
+                inferred_documents.append('aadhaar')
+            elif 'pan' in lowered_name or 'permanent' in lowered_name:
+                inferred_documents.append('pan')
+            elif 'degree' in lowered_name or 'certificate' in lowered_name or 'marksheet' in lowered_name or 'transcript' in lowered_name or 'diploma' in lowered_name:
+                inferred_documents.append('degree_certificate')
+            else:
+                file_extension = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+                inferred_documents.append(file_extension or 'unknown')
 
         document = {
-            "name": uploaded_file.filename,
-            "trainee_id": "TR001",
+            "name": document_name,
+            "trainee_id": trainee_id,
             "documents": inferred_documents,
         }
 
         result = verification_agent.run_agent_loop(document)
         response = {
-            "filename": filename,
-            "file_type": file_extension,
+            "filenames": uploaded_filenames,
             "documents": inferred_documents,
             **result,
         }

@@ -130,7 +130,7 @@ class VerificationAgent:
             return {
                 "needs_confirmation": True,
                 "status": "pending_confirmation",
-                "message": "Required documents are missing. Please confirm the current findings before updating.",
+                "message": "Required documents are missing. Please upload the missing document(s) and resubmit once complete.",
                 "missing_documents": required_result["missing_documents"],
                 "trainee": trainee_result,
             }
