@@ -70,6 +70,25 @@ def create_app():
             "trainee_id": document.get("trainee_id")
             or document.get("id")
             or document.get("id_number"),
+
+            "episodic_memory":verification_agent.episodic_memory.get(
+                str(document.get("trainee_id")
+                or document.get("id")
+                or document.get("id_number")), 
+                []
+            ),
+            "chat_history": verification_agent.chat_history.get(
+                str(document.get("trainee_id")
+                or document.get("id")
+                or document.get("id_number")),
+                []
+            ),
+            "reasoning_steps": verification_agent.reasoning_steps.get(
+                str(document.get("trainee_id")
+                or document.get("id")
+                or document.get("id_number")),
+                []
+            )
         }
 
         status_code = 200
@@ -118,6 +137,11 @@ def create_app():
         }
 
         result = verification_agent.run_agent_loop(document)
+
+        result["episodic_memory"]=verification_agent.episodic_memory.get(trainee_id,[])
+
+        result["chat_history"]=verification_agent.chat_history.get(trainee_id,[])
+        result["reasoning_steps"]=verification_agent.reasoning_steps.get(trainee_id,[])
         display_labels = {
             "resume": "Resume",
             "aadhaar": "Aadhaar Card",

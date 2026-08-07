@@ -91,23 +91,78 @@
       }
 
       function renderResponseBody(data) {
-        const message = data.message || 'Verification completed.';
+        const message = data.message || "Verification completed.";
+
         const uploadedDocuments = data.uploaded_documents || [];
         const filenames = data.filenames || [];
         const missingDocuments = data.missing_documents || [];
+
         const uploadedHtml = renderUploadedDocuments(uploadedDocuments, filenames);
         const missingHtml = renderMissingDocuments(missingDocuments);
-        const retryNote = missingDocuments.length > 0
-          ? '<div>Please upload the missing documents and click "Upload Documents" again.</div>'
-          : '<div>All required documents have been uploaded and verified.</div>';
 
-        return `
-          <div>${message}</div>
-          ${uploadedHtml}
-          ${missingHtml}
-          ${retryNote}
-        `;
-      }
+    // -----------------------
+    // Episodic Memory
+    // -----------------------
+        let memoryHtml = "";
+        if (data.episodic_memory && data.episodic_memory.length) {
+          memoryHtml = `
+          <h4>🧠 Episodic Memory</h4>
+          <ul>
+            ${data.episodic_memory.map(event => {
+                if (event.event === "upload") {
+                    return `<li>${event.timestamp} → Uploaded: ${event.documents.join(", ")}</li>`;
+                }
+                return `<li>${event.timestamp} → Verification Completed (${event.status})</li>`;
+            }).join("")}
+        </ul>`;
+       }
+
+    // -----------------------
+    // Chat History
+    // -----------------------
+       let chatHtml = "";
+       if (data.chat_history && data.chat_history.length) {
+        chatHtml = `
+        <h4>💬 Chat History</h4>
+        <ul>
+            ${data.chat_history.map(chat =>
+                `<li><b>${chat.role}</b>: ${chat.message}</li>`
+            ).join("")}
+        </ul>`;
+    }
+
+    // -----------------------
+    // Reasoning Steps
+    // -----------------------
+        let reasoningHtml = "";
+        if (data.reasoning_steps && data.reasoning_steps.length) {
+          reasoningHtml = `
+          <h4>🤖 Agent Reasoning</h4>
+          <ol>
+            ${data.reasoning_steps.map(step =>
+                `<li>${step}</li>`
+            ).join("")}
+        </ol>`;
+    }
+
+    const retryNote =
+        missingDocuments.length > 0
+        ? '<div>Please upload the missing documents and click <b>Upload Documents</b> again.</div>'
+        : '<div>All required documents have been uploaded.</div>';
+
+    return `
+        <div>${message}</div>
+        ${uploadedHtml}
+        ${missingHtml}
+        ${memoryHtml}
+
+        ${chatHtml}
+
+        ${reasoningHtml}
+
+        ${retryNote}
+    `;
+}
 
       function hideConfirmSection() {
         document.getElementById('confirm-section').classList.add('hidden');

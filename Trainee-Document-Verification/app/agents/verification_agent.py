@@ -8,11 +8,14 @@ class VerificationAgent:
         self.llm_client = llm_client or LLMClient()
         self.document_verifier = document_verifier or DocumentVerifier(self.llm_client)
         self._verification_state = {}
-        self.semantic_memory={}
-        self.episodic_memory={}
         self._uploaded_documents={}
+
+        
+        self.episodic_memory={}
+        
         self.chat_history={}
         self.reasoning_steps={}
+
         self.pending_verification = None
 
     def add_message(self,trainee_id,role,message):
@@ -127,14 +130,28 @@ class VerificationAgent:
             "event":"upload",
             "documents":documents,
             "timestamp":datetime.now().strftime("%H:%M:%S") 
-        })    
+        })  
+
+    def remember_verification(self,trainee_id,status):
+        trainee_id =str(trainee_id)
+
+        self.episodic_memory.setdefault(
+            trainee_id,
+            []
+
+        ) .append({
+            "event":"verification_completed",
+            "status":status,
+            "timestamp":datetime.now().strftime("%H:%M:%S")
+        })     
 
     def get_uploaded_documents(self,trainee_id):
         trainee_id=str(trainee_id)
         uploaded = []
 
         for event in self.episodic_memory.get(trainee_id, []):
-            uploaded.extend(event["documents"])
+            if event["event"] == "upload":
+                uploaded.extend(event["documents"])
 
         return list(dict.fromkeys(uploaded))   
 
@@ -151,31 +168,29 @@ class VerificationAgent:
             or document.get("id_number")
             or "unknown"
         )
-        self.add_message(
+        self.add_step(
             trainee_id,
-            "user",
-            f"Uploaded documents:{','.join(new_documents)}
-        )
-        self.add_message(
-           trainee_id,
-           "agent",
-           f"Missing documents: {', '.join(required_result['missing_documents'])}"
-        )
-        self.add_message(
-           trainee_id,
-           "agent",
-           "Verification completed."
-        )
-
+            "searching trainee record"
+        ) 
+        
     # -----------------------------
     # Remember previously uploaded documents
     # -----------------------------
         new_documents = self._normalize_documents(
             document.get("documents", [])
         )
+        self.add_message(
+                trainee_id,
+                "user",
+                f"Uploaded documents:{','.join(new_documents)}"
+        )
         self.remember_upload(
             trainee_id,
             new_documents
+        )
+        self.add_step(
+            trainee_id,
+            "checking uploaded documents"
         )
 
         stored_documents = self.get_uploaded_documents(
@@ -192,13 +207,18 @@ class VerificationAgent:
         required_result = check_required_documents(
             submitted_documents
             )
+        self.add_step(
+            trainee_id,
+            "Comapring with required documents"
+        )
+        self.add_message(
+                trainee_id,
+                "agent",
+                f"Missing documents: {', '.join(required_result['missing_documents'])}"
+            )
 
         trainee_result = get_trainee_record(trainee_id)
-        self.semantic_memory[trainee_id] = {
-            "name": trainee_result.get("full_name"),
-            "required_documents": required_result["required_documents"],
-            "status": trainee_result.get("status")
-        }
+        
 
     # Save current verification state
         self._verification_state[trainee_id] = {
@@ -236,18 +256,30 @@ class VerificationAgent:
             }
 
             verified_result = self.confirm_verification(trainee_id)
-            if trainee_id in self.semantic_memory:
-                self.semantic_memory[trainee_id]["status"]="verified"
+            self.add_step(
+                trainee_id,
+                "Verification completed"
+            )
+           
                 
             update_result = update_verification_status(
                 trainee_id,
                 status="verified",
                 confirmed=True,
                 )
+            self.add_message(
+                       trainee_id,
+                       "agent",
+                       "Verification completed."
+                    )
+            
+            self.remember_verification(trainee_id, "verified")
 
         # Clear memory after successful verification
             self._uploaded_documents.pop(trainee_id,None)
             self._verification_state.pop(trainee_id,None)
+
+            
 
             return {
                 "is_verified": True,
@@ -263,6 +295,12 @@ class VerificationAgent:
     # STEP 2 : Missing documents
     # =====================================================
         if required_result["missing_documents"]:
+
+            self.add_step(
+                    trainee_id,
+                    "Waiting for missing documents"
+                )
+            
             return {
                 "status": "pending_confirmation",
                 "needs_confirmation": True,
@@ -274,6 +312,7 @@ class VerificationAgent:
                 "missing_documents": required_result["missing_documents"],
                 "trainee": trainee_result,
             }
+        
 
     # =====================================================
     # STEP 3 : All documents uploaded
