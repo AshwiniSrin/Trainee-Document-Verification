@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Verification Agent Test</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; background: #f7f9fc; color: #222; }
+      .container { max-width: 700px; margin: 0 auto; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+      button { padding: 0.7rem 1rem; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 6px; }
+      button:hover { background: #1d4ed8; }
+      .row { margin-bottom: 1rem; }
+      label { display: block; font-weight: 600; margin-bottom: 0.3rem; }
+      input[type="text"], input[type="file"] { width: 100%; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 6px; }
+      .message-box { background: #f5f5f5; padding: 1rem; border-radius: 6px; white-space: pre-wrap; border-left: 5px solid #94a3b8; }
+      .message-box.success { border-left-color: #16a34a; background: #f0fdf4; }
+      .message-box.error { border-left-color: #dc2626; background: #fef2f2; }
+      .status { font-weight: bold; margin-bottom: 0.5rem; }
+      .hidden { display: none; }
+      .hint { font-size: 0.9rem; color: #475569; margin-top: 0.35rem; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Verification Agent Test</h1>
+      <form id="upload-form" onsubmit="event.preventDefault(); sendRequest();">
+        <div class="row">
+          <label for="name">Trainee Name</label>
+          <input id="name" name="name" type="text" value="Ashwini Re" />
+        </div>
+        <div class="row">
+          <label for="trainee_id">Trainee ID</label>
+          <input id="trainee_id" name="trainee_id" type="text" value="TR001" />
+        </div>
+        <div class="row">
+          <label for="files">Upload documents</label>
+          <input id="files" name="files" type="file" multiple />
+          <div class="hint">Choose one or more files. If a required document is missing, upload the missing files and click Upload Documents again.</div>
+        </div>
+        <div class="row">
+          <button type="submit">Upload Documents</button>
+        </div>
+      </form>
+      <div id="retry-section" class="hidden">
+        <h2>Upload Missing Documents</h2>
+        <div class="row">
+          <label for="retry_files">Select missing document(s)</label>
+          <input id="retry_files" name="retry_files" type="file" multiple />
+          <div class="hint">Upload only the missing document(s) and click Re-upload.</div>
+        </div>
+        <div class="row">
+          <button type="button" onclick="sendRetryRequest()">Re-upload Missing Documents</button>
+        </div>
+      </div>
+      <div id="confirm-section" class="hidden">
+        <h2>Confirm Verification</h2>
+        <div class="hint">All required documents appear present. Confirm to complete verification.</div>
+        <div class="row">
+          <button type="button" onclick="confirmVerification()">Confirm Verification</button>
+          <button type="button" onclick="hideConfirmSection()" style="background:#6b7280;margin-left:0.5rem;">Cancel</button>
+        </div>
+      </div>
+      <h2>Response</h2>
+      <div id="output" class="message-box">Waiting...</div>
+    </div>
+
+    <script>
+      let lastDocumentKeys = [];
+      let uploadedDocumentKeys=[]
+
+      function formatDocumentLabel(docKey) {
+        const labels = {
+          resume: 'Resume',
+          aadhaar: 'Aadhaar Card',
+          pan: 'PAN Card',
+          degree_certificate: 'Degree Certificate',
+        };
+        return labels[docKey] || docKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      }
+
+      function renderUploadedDocuments(uploadedDocuments = [], filenames = []) {
+        const docs = uploadedDocuments.length > 0 ? uploadedDocuments : filenames;
+        if (!docs.length) return '';
+        return `<h4>Uploaded Documents</h4><ul>${docs.map(doc => `<li>✔ ${doc}</li>`).join('')}</ul>`;
+      }
+
+      function renderMissingDocuments(missingDocuments = []) {
+        if (!missingDocuments.length) {
+          return '<h4>Missing Documents</h4><p>None</p>';
+        }
+        return `<h4>Missing Documents</h4><ul>${missingDocuments.map(doc => `<li>❌ ${formatDocumentLabel(doc)}</li>`).join('')}</ul>`;
+      }
+
+      function renderResponseBody(data) {
+        const message = data.message || 'Verification completed.';
+        const uploadedDocuments = data.uploaded_documents || [];
+        const filenames = data.filenames || [];
+        const missingDocuments = data.missing_documents || [];
+        const uploadedHtml = renderUploadedDocuments(uploadedDocuments, filenames);
+        const missingHtml = renderMissingDocuments(missingDocuments);
+        const retryNote = missingDocuments.length > 0
+          ? '<div>Please upload the missing documents and click "Upload Documents" again.</div>'
+          : '<div>All required documents have been uploaded and verified.</div>';
+
+        return `
+          <div>${message}</div>
+          ${uploadedHtml}
+          ${missingHtml}
+          ${retryNote}
+        `;
+      }
+
+      function hideConfirmSection() {
+        document.getElementById('confirm-section').classList.add('hidden');
+      }
+
+      async function sendRequest() {
+        const output = document.getElementById('output');
+        const retrySection = document.getElementById('retry-section');
+        const confirmSection = document.getElementById('confirm-section');
+        const fileInput = document.getElementById('files');
+        const nameInput = document.getElementById('name');
+        const traineeIdInput = document.getElementById('trainee_id');
+        output.textContent = 'Sending...';
+        output.className = 'message-box';
+        retrySection.classList.add('hidden');
+        confirmSection.classList.add('hidden');
+
+        try {
+          const formData = new FormData();
+          formData.append('name', nameInput.value);
+          formData.append('trainee_id', traineeIdInput.value);
+          for (const file of fileInput.files) {
+            formData.append('files', file);
+          }
+
+          const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          const data = await response.json();
+          const status = (data.status || 'Completed').toString();
+          lastDocumentKeys = data.document_keys || [];
+          uploadedDocumentKeys=[...lastDocumentKeys];
+          output.innerHTML = `
+            <div class="status">Status: ${status}</div>
+            ${renderResponseBody(data)}
+          `;
+          output.className = `message-box ${status === 'pending' || status === 'error' ? 'error' : 'success'}`;
+
+          if ((data.missing_documents || []).length > 0) {
+            retrySection.classList.remove('hidden');
+          } else if (data.status === 'pending_confirmation' || data.needs_confirmation) {
+            confirmSection.classList.remove('hidden');
+          }
+        } catch (error) {
+          output.textContent = 'Error: ' + error.message;
+          output.className = 'message-box error';
+        }
+      }
+
+      async function sendRetryRequest() {
+        const output = document.getElementById('output');
+        const retrySection = document.getElementById('retry-section');
+        const confirmSection = document.getElementById('confirm-section');
+        const fileInput = document.getElementById('retry_files');
+        const nameInput = document.getElementById('name');
+        const traineeIdInput = document.getElementById('trainee_id');
+        output.textContent = 'Re-uploading missing documents...';
+        output.className = 'message-box';
+        confirmSection.classList.add('hidden');
+
+        try {
+          const formData = new FormData();
+          formData.append('name', nameInput.value);
+          formData.append('trainee_id', traineeIdInput.value);
+          for (const file of fileInput.files) {
+            formData.append('files', file);
+          }
+
+          const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          const data = await response.json();
+          const status = (data.status || 'Completed').toString();
+          const newKeys = data.document_keys || [];
+          uploadedDocumentKeys=[
+            ...new Set([
+              ...uploadedDocumentKeys, 
+              ...newKeys
+            ])
+          ];
+          lastDocumentKeys=uploadedDocumentKeys;
+          output.innerHTML = `
+            <div class="status">Status: ${status}</div>
+            ${renderResponseBody(data)}
+          `;
+          output.className = `message-box ${status === 'pending' || status === 'error' ? 'error' : 'success'}`;
+
+          if ((data.missing_documents || []).length > 0) {
+            retrySection.classList.remove('hidden');
+          } else {
+            retrySection.classList.add('hidden');
+          }
+
+          if (data.status === 'pending_confirmation' || data.needs_confirmation) {
+            confirmSection.classList.remove('hidden');
+          }
+        } catch (error) {
+          output.textContent = 'Error: ' + error.message;
+          output.className = 'message-box error';
+        }
+      }
+
+      async function confirmVerification() {
+        const output = document.getElementById('output');
+        const retrySection = document.getElementById('retry-section');
+        const confirmSection = document.getElementById('confirm-section');
+        const nameInput = document.getElementById('name');
+        const traineeIdInput = document.getElementById('trainee_id');
+        output.textContent = 'Confirming verification...';
+        output.className = 'message-box';
+        retrySection.classList.add('hidden');
+        confirmSection.classList.add('hidden');
+
+        try {
+          const requestBody = {
+            name: nameInput.value,
+            trainee_id: traineeIdInput.value,
+            documents: lastDocumentKeys,
+            confirmation: true,
+          };
+
+          const response = await fetch('/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          });
+
+          const data = await response.json();
+          const status = (data.status || 'Completed').toString();
+          output.innerHTML = `
+            <div class="status">Status: ${status}</div>
+            ${renderResponseBody(data)}
+          `;
+          output.className = `message-box ${status === 'pending' || status === 'error' ? 'error' : 'success'}`;
+        } catch (error) {
+          output.textContent = 'Error: ' + error.message;
+          output.className = 'message-box error';
+        }
+      }
+    </script>
+  </body>
+</html>
