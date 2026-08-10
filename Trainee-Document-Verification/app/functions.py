@@ -1,3 +1,18 @@
+SEMANTIC_MEMORY={
+    "required_documents":{
+        "value":["aadhaar","resume","degree_certificate","pan"],
+        "description":"Documents required to complete trainee verification."
+    },
+    "verification_policy": {
+        "value": "All four required documents must be submitted before verification can be confirmed.",
+        "description": "Rule governing when a trainee can be marked verified.",
+    },
+}
+def get_fact(key):
+    """Retrieve a single semantic fact by its key."""
+    entry = SEMANTIC_MEMORY.get(key)
+    return entry["value"] if entry else None
+
 def get_trainee_record(trainee_id):
     record = {
         "trainee_id": str(trainee_id),
@@ -9,7 +24,7 @@ def get_trainee_record(trainee_id):
 
 
 def check_required_documents(documents):
-    required_documents = ["aadhaar", "resume", "degree_certificate", "pan"]
+    required_documents = get_fact("required_documents")
     submitted_documents = [doc.lower() for doc in documents or [] if isinstance(doc, str)]
     missing_documents = [doc for doc in required_documents if doc not in submitted_documents]
     return {
@@ -67,4 +82,5 @@ TOOL_FUNCTIONS = {
     "check_required_documents": check_required_documents,
     "verify_uploaded_documents": verify_uploaded_documents,
     "update_verification_status": update_verification_status,
+    "get_fact":get_fact,
 }

@@ -112,6 +112,9 @@
                 if (event.event === "upload") {
                     return `<li>${event.timestamp} → Uploaded: ${event.documents.join(", ")}</li>`;
                 }
+                if (event.event === "message"){
+                  return `<li>${event.timestamp} → ${event.role}: ${event.message}</li>`;
+                }
                 return `<li>${event.timestamp} → Verification Completed (${event.status})</li>`;
             }).join("")}
         </ul>`;
@@ -126,7 +129,7 @@
         <h4>💬 Chat History</h4>
         <ul>
             ${data.chat_history.map(chat =>
-                `<li><b>${chat.role}</b>: ${chat.message}</li>`
+                `<li><b>${chat.role}</b>: ${chat.message}</li>` 
             ).join("")}
         </ul>`;
     }
@@ -144,6 +147,12 @@
             ).join("")}
         </ol>`;
     }
+    let semanticHtml = "";
+    if (data.semantic_memory && data.semantic_memory.length) {
+      semanticHtml = `
+      <h4>📚 Semantic Memory (Known Facts)</h4>
+      <ul>${data.semantic_memory.map(doc => `<li>${formatDocumentLabel(doc)}</li>`).join("")}</ul>`;
+    }
 
     const retryNote =
         missingDocuments.length > 0
@@ -154,6 +163,7 @@
         <div>${message}</div>
         ${uploadedHtml}
         ${missingHtml}
+        ${semanticHtml}
         ${memoryHtml}
 
         ${chatHtml}

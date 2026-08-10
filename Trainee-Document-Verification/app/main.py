@@ -2,6 +2,7 @@ import logging
 import sys
 from pathlib import Path
 
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 from flask import Flask, jsonify, request, render_template
 from app.config import Config
 from app.agents.verification_agent import VerificationAgent
+from app.functions import get_fact
 
 
 def create_app():
@@ -70,6 +72,8 @@ def create_app():
             "trainee_id": document.get("trainee_id")
             or document.get("id")
             or document.get("id_number"),
+
+            "semantic_memory": get_fact("required_documents"),
 
             "episodic_memory":verification_agent.episodic_memory.get(
                 str(document.get("trainee_id")
@@ -142,6 +146,7 @@ def create_app():
 
         result["chat_history"]=verification_agent.chat_history.get(trainee_id,[])
         result["reasoning_steps"]=verification_agent.reasoning_steps.get(trainee_id,[])
+        result["semantic_memory"] = get_fact("required_documents") 
         display_labels = {
             "resume": "Resume",
             "aadhaar": "Aadhaar Card",

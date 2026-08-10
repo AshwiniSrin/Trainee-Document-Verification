@@ -1,4 +1,4 @@
-from app.functions import check_required_documents, get_trainee_record, update_verification_status
+from app.functions import check_required_documents, get_trainee_record, update_verification_status, get_fact
 from app.services.document_verifier import DocumentVerifier
 from app.services.llm_client import LLMClient
 from datetime import datetime
@@ -25,6 +25,7 @@ class VerificationAgent:
             "message":message
         })  
         self.chat_history[trainee_id]=self.chat_history[trainee_id][-20:]
+        self.remember_message(trainee_id,role,message)
 
 
     def verify_document(self, document):
@@ -145,6 +146,15 @@ class VerificationAgent:
             "timestamp":datetime.now().strftime("%H:%M:%S")
         })     
 
+    def remember_message(self, trainee_id, role, message):
+        trainee_id = str(trainee_id)
+        self.episodic_memory.setdefault(trainee_id, []).append({
+        "event": "message",
+        "role": role,
+        "message": message,
+        "timestamp": datetime.now().strftime("%H:%M:%S")
+    })    
+
     def get_uploaded_documents(self,trainee_id):
         trainee_id=str(trainee_id)
         uploaded = []
@@ -168,50 +178,29 @@ class VerificationAgent:
             or document.get("id_number")
             or "unknown"
         )
-        self.add_step(
-            trainee_id,
-            "searching trainee record"
-        ) 
+        
         
     # -----------------------------
     # Remember previously uploaded documents
     # -----------------------------
-        new_documents = self._normalize_documents(
-            document.get("documents", [])
-        )
-        self.add_message(
-                trainee_id,
-                "user",
-                f"Uploaded documents:{','.join(new_documents)}"
-        )
-        self.remember_upload(
-            trainee_id,
-            new_documents
-        )
-        self.add_step(
-            trainee_id,
-            "checking uploaded documents"
-        )
+        new_documents = self._normalize_documents(document.get("documents", []))
+        stored_documents = self.get_uploaded_documents(trainee_id)
+        genuinely_new=[d for d in new_documents if d not in stored_documents]
+        if genuinely_new and not confirmation:
+            self.add_step(trainee_id, "searching trainee record")
+            self.add_message(trainee_id,"user",f"Uploaded documents:{','.join(genuinely_new)}")
+            self.remember_upload(trainee_id, genuinely_new)
+            self.add_step(trainee_id,"checking uploaded documents")    
 
-        stored_documents = self.get_uploaded_documents(
-            trainee_id
-        )
 
-        submitted_documents = list(
-            dict.fromkeys(
-                stored_documents + new_documents
-            )
-        )
-
+        submitted_documents = list(dict.fromkeys(stored_documents + new_documents))
         self._uploaded_documents[trainee_id] = submitted_documents
-        required_result = check_required_documents(
-            submitted_documents
-            )
-        self.add_step(
-            trainee_id,
-            "Comapring with required documents"
-        )
-        self.add_message(
+        required_result = check_required_documents(submitted_documents)
+        if genuinely_new and not confirmation:
+            self.add_step(trainee_id, f"consulting semantic memory: required documents = {get_fact('required_documents')}")
+
+            self.add_step(trainee_id,"Comparing with required documents")
+            self.add_message(
                 trainee_id,
                 "agent",
                 f"Missing documents: {', '.join(required_result['missing_documents'])}"

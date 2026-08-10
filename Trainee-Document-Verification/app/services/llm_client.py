@@ -38,7 +38,7 @@ class FakeLLMClient:
 class LLMClient:
     def __init__(self, api_key=None, model=None, api_base=None):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.model = model or os.getenv("OPENAI_MODEL", "gpt-5")
         self.api_base = (api_base or os.getenv("OPENAI_API_BASE") or os.getenv("API_URL") or "https://api.openai.com/v1").rstrip("/")
         self.last_response = None
 
