@@ -72,21 +72,7 @@ def create_app():
             "trainee_id": document.get("trainee_id")
             or document.get("id")
             or document.get("id_number"),
-
-            "semantic_memory": get_fact("required_documents"),
-
-            "episodic_memory":verification_agent.episodic_memory.get(
-                str(document.get("trainee_id")
-                or document.get("id")
-                or document.get("id_number")), 
-                []
-            ),
-            "chat_history": verification_agent.chat_history.get(
-                str(document.get("trainee_id")
-                or document.get("id")
-                or document.get("id_number")),
-                []
-            ),
+              
             "reasoning_steps": verification_agent.reasoning_steps.get(
                 str(document.get("trainee_id")
                 or document.get("id")
@@ -141,12 +127,8 @@ def create_app():
         }
 
         result = verification_agent.run_agent_loop(document)
-
-        result["episodic_memory"]=verification_agent.episodic_memory.get(trainee_id,[])
-
-        result["chat_history"]=verification_agent.chat_history.get(trainee_id,[])
         result["reasoning_steps"]=verification_agent.reasoning_steps.get(trainee_id,[])
-        result["semantic_memory"] = get_fact("required_documents") 
+
         display_labels = {
             "resume": "Resume",
             "aadhaar": "Aadhaar Card",
@@ -173,7 +155,30 @@ def create_app():
             status_code = 400
         return jsonify(response), status_code
 
+    @app.route('/history/<trainee_id>', methods=['GET'])
+    def get_history(trainee_id):
+        return jsonify({
+            "trainee_id": trainee_id,
+            "semantic_memory": get_fact("required_documents"),
+            "episodic_memory": verification_agent.episodic_memory.get(trainee_id, []),
+            "chat_history": verification_agent.chat_history.get(trainee_id, []),
+            "reasoning_steps": verification_agent.reasoning_steps.get(trainee_id, []),
+        })
+
+    @app.route('/history/<trainee_id>', methods=['DELETE'])
+    def clear_history(trainee_id):
+        verification_agent.episodic_memory.pop(trainee_id, None)
+        verification_agent.chat_history.pop(trainee_id, None)
+        verification_agent.reasoning_steps.pop(trainee_id, None)
+        verification_agent._verification_state.pop(trainee_id, None)
+        verification_agent._uploaded_documents.pop(trainee_id, None)
+        return jsonify({"message": f"History cleared for trainee {trainee_id}"})
+
     return app
+
+    
+
+    
 
 
 if __name__ == '__main__':

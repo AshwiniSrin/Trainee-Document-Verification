@@ -103,23 +103,7 @@
     // -----------------------
     // Episodic Memory
     // -----------------------
-        let memoryHtml = "";
-        if (data.episodic_memory && data.episodic_memory.length) {
-          memoryHtml = `
-          <h4>🧠 Episodic Memory</h4>
-          <ul>
-            ${data.episodic_memory.map(event => {
-                if (event.event === "upload") {
-                    return `<li>${event.timestamp} → Uploaded: ${event.documents.join(", ")}</li>`;
-                }
-                if (event.event === "message"){
-                  return `<li>${event.timestamp} → ${event.role}: ${event.message}</li>`;
-                }
-                return `<li>${event.timestamp} → Verification Completed (${event.status})</li>`;
-            }).join("")}
-        </ul>`;
-       }
-
+        
     // -----------------------
     // Chat History
     // -----------------------
@@ -147,13 +131,7 @@
             ).join("")}
         </ol>`;
     }
-    let semanticHtml = "";
-    if (data.semantic_memory && data.semantic_memory.length) {
-      semanticHtml = `
-      <h4>📚 Semantic Memory (Known Facts)</h4>
-      <ul>${data.semantic_memory.map(doc => `<li>${formatDocumentLabel(doc)}</li>`).join("")}</ul>`;
-    }
-
+    
     const retryNote =
         missingDocuments.length > 0
         ? '<div>Please upload the missing documents and click <b>Upload Documents</b> again.</div>'
@@ -163,19 +141,54 @@
         <div>${message}</div>
         ${uploadedHtml}
         ${missingHtml}
-        ${semanticHtml}
-        ${memoryHtml}
-
         ${chatHtml}
-
         ${reasoningHtml}
-
         ${retryNote}
     `;
 }
 
       function hideConfirmSection() {
         document.getElementById('confirm-section').classList.add('hidden');
+      }
+
+      
+      async function clearHistory() {
+        const traineeIdInput = document.getElementById('trainee_id');
+        const traineeId = traineeIdInput.value;
+        if (!traineeId) return;
+
+        if (!confirm(`Clear all history for trainee ${traineeId}?`)) return;
+
+        try {
+          await fetch(`/history/${traineeId}`, { method: 'DELETE' });
+          const episodicOutput = document.getElementById('episodic-output');
+          episodicOutput.innerHTML = `<p>History cleared for ${traineeId}.</p>`;
+          lastDocumentKeys = [];
+          uploadedDocumentKeys = [];
+        } catch (error) {
+          console.error('Could not clear history:', error);
+        }
+      }
+
+      async function clearHistory() {
+        const traineeIdInput = document.getElementById('trainee_id');
+        const traineeId = traineeIdInput.value;
+        if (!traineeId) return;
+
+        if (!confirm(`Clear all history for trainee ${traineeId}?`)) return;
+
+        try {
+          await fetch(`/history/${traineeId}`, { method: 'DELETE' });
+          const output = document.getElementById('output');
+          output.textContent = 'History cleared. Waiting...';
+          output.className = 'message-box';
+          document.getElementById('retry-section').classList.add('hidden');
+          document.getElementById('confirm-section').classList.add('hidden');
+          lastDocumentKeys = [];
+          uploadedDocumentKeys = [];
+        } catch (error) {
+          console.error('Could not clear history:', error);
+        }
       }
 
       async function sendRequest() {
@@ -316,6 +329,7 @@
           output.className = 'message-box error';
         }
       }
+      
     </script>
   </body>
 </html>
